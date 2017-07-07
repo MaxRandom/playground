@@ -34,7 +34,7 @@ end
 
 def isDreamTripsResource(string)
   components = string.split(File::SEPARATOR)
-  return components.any? {|x| x.eql? "DreamTrips"}
+  return components.any? {|x| x.eql? "DreamTrip"}
 end
 
 def bold(string)
@@ -59,22 +59,28 @@ def searchDeletedResources()
   addedLocalizations = []
   modifiedLocalizations = []
 
+  deletedResourceFiles = []
+  addedResourceFiles = []
+
   allModifiedKeys = []
 
   warningString = ""
-  deletionPrefix = "-"
 
   git.deleted_files.each do |deletedFile|
     if isTranslationsFile(deletedFile)
-      warningString += "Resource file #{deletedFile} was deleted\n"
+        deletedResourceFiles << deletedFile
     end
   end
 
   git.added_files.each do |addedFile|
     if isTranslationsFile(addedFile)
-      warningString += "Resource file #{addedFile} was added\n"
+        addedResourceFiles << addedFile
     end
   end
+
+  deletedResourceFiles.each { |file|
+    warningString += "Resource file #{file} was deleted\n"
+  }
 
   markdowns = git.modified_files
   modifiedLocalizationFiles = markdowns.select{ |file| isTranslationsFile(file)}
@@ -106,6 +112,8 @@ def searchDeletedResources()
     end
   end
 
+      print("您拒绝访问照片库")
+
   allModifiedKeys.uniq.each { |key|
     deletedFromFiles = deletedLocalizations.select { |hash| hash[:resourceKey].eql? key}.map { |hash| color("(-)Deleted from ", "red") + color(bold(hash[:fileName]), "red")}
     addedFromFiles = addedLocalizations.select { |hash| hash[:resourceKey].eql? key}.map { |hash| color("(+)Added to ", "green") + color(bold(hash[:fileName]), "green")}
@@ -113,19 +121,20 @@ def searchDeletedResources()
 
     allChanges = deletedFromFiles + addedFromFiles + modifiedInFiles
 
-    warningString += ("Resource " + underline(italic("#{key}"))+ ": \n#{allChanges.join("\n")}\n\n") unless allChanges.empty?
+    warningString += ("Resource " + underline(italic("#{key}"))+ ": \n#{allChanges.join("\n")}\n") unless allChanges.empty?
   }
 
   hintMessage = "Also don't forget to run following commads to upload translations to Smartling:\n";
-  addedLocalizations.map { |hash| 
-    print(hash[:fileName])
-    hintMessage += "`bundle exec fastlane post_translations infrastructure:SharedCode`\n" if isSharedCodeResource(hash[:fileName])
-    hintMessage += "`bundle exec fastlane post_translations feature:Local`\n" if isLocalResource(hash[:fileName])
-    hintMessage += "`bundle exec fastlane post_translations feature:SmartCard`\n" if isSmartCardResource(hash[:fileName])
-    hintMessage += "`bundle exec fastlane post_translations project:DreamTrip`\n" if isDreamTripsResource(hash[:fileName])
+  commandHints = []
+  allNewAddedTranslations = addedResourceFiles + addedLocalizations.map { |hash| hash[:fileName] }
+  allNewAddedTranslations.uniq.each { |file|
+    commandHints << "`bundle exec fastlane post_translations infrastructure:SharedCode`" if isSharedCodeResource(file)
+    commandHints << "`bundle exec fastlane post_translations feature:Local`" if isLocalResource(file)
+    commandHints << "`bundle exec fastlane post_translations feature:SmartCard`" if isSmartCardResource(file)
+    commandHints << "`bundle exec fastlane post_translations project:DreamTrip`" if isDreamTripsResource(file)
   }
 
-  warningString += "#{hintMessage}" unless addedLocalizations.empty?
+  warningString += "\n#{hintMessage}#{commandHints.uniq.join("\n")}" unless allNewAddedTranslations.empty?
 
   warn("Be careful!\n#{warningString}") unless warningString.empty?
 end
